@@ -1,0 +1,23 @@
+# Render service definition. Push this repo to a Git host (GitHub etc.),
+# then in Render's dashboard: New > Blueprint > point at the repo.
+#
+# Required env vars to set in the Render dashboard after first deploy:
+#   APP_PASSWORD  - shared team password used at /login
+#   AUTH_SECRET   - random 32+ byte string for cookie signing
+#                   (generate: `openssl rand -hex 32`)
+#
+services:
+  - type: web
+    name: listicle-to-instagram
+    runtime: docker
+    plan: starter # starter ($7/mo) keeps the container always-on; free tier sleeps after 15min idle
+    region: oregon
+    healthCheckPath: /login
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_PASSWORD
+        sync: false # set manually in dashboard, don't commit
+      - key: AUTH_SECRET
+        generateValue: true # Render generates a random secret

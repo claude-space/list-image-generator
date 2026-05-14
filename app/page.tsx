@@ -1,0 +1,591 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import type { ExtractResult, BrandConfig, ListItem, ImagePosition } from "./types";
+
+const DEFAULT_POSITION: ImagePosition = { x: 50, y: 50 };
+
+const DEFAULT_BG = "#0b0b0c";
+const DEFAULT_TEXT = "#ffffff";
+const DEFAULT_ACCENT = "#e11d48";
+
+export default function Home() {
+  const [url, setUrl] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [extracted, setExtracted] = useState<ExtractResult | null>(null);
+  const [title, setTitle] = useState("");
+  const [items, setItems] = useState<ListItem[]>([]);
+  const [brand, setBrand] = useState<BrandConfig>({
+    siteName: "",
+    accentColor: DEFAULT_ACCENT,
+    bgColor: DEFAULT_BG,
+    textColor: DEFAULT_TEXT,
+    fontFamily: "Inter",
+    logoDataUrl: null,
+    logoUrl: null,
+  });
+  const [coverPosition, setCoverPosition] = useState<ImagePosition>(DEFAULT_POSITION);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [previewing, setPreviewing] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+
+  async function handleExtract(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    setExtracted(null);
+    setPreviews([]);
+    setCoverPosition(DEFAULT_POSITION);
+    try {
+      const r = await fetch("/api/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? "Extraction failed");
+      const result = data as ExtractResult;
+      setExtracted(result);
+      setTitle(result.title);
+      setItems(result.items);
+      setBrand({
+        siteName: result.branding.siteName ?? result.branding.domain,
+        accentColor: result.branding.accentColor ?? DEFAULT_ACCENT,
+        bgColor: DEFAULT_BG,
+        textColor: DEFAULT_TEXT,
+        fontFamily: result.branding.fontFamily ?? "Inter",
+        // Logo bytes are returned pre-fetched from /api/extract so we don't
+        // have to re-resolve a CDN-fronted URL at render time.
+        logoDataUrl: result.branding.logoDataUrl,
+        logoUrl: result.branding.logoUrl,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const slides = useMemo(() => {
+    if (!extracted) return [];
+    return buildSlides(extracted, title, items, brand, coverPosition);
+  }, [extracted, title, items, brand, coverPosition]);
+
+  async function handlePreview() {
+    if (!slides.length) return;
+    setPreviewing(true);
+    setError(null);
+    try {
+      const results: string[] = [];
+      for (let i = 0; i < slides.length; i++) {
+        const r = await fetch("/api/render", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            slides,
+            format: "single",
+            index: i,
+          }),
+        });
+        if (!r.ok) {
+          const e = await r.json().catch(() => ({}));
+          throw new Error(e.error ?? `Render failed (slide ${i + 1})`);
+        }
+        const blob = await r.blob();
+        results.push(URL.createObjectURL(blob));
+        setPreviews([...results]);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Preview failed");
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
+  async function handleDownload() {
+    if (!slides.length) return;
+    setDownloading(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/render", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slides, format: "zip" }),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.error ?? "Download failed");
+      }
+      const blob = await r.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "instagram-carousel.zip";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Download failed");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setBrand((b) => ({ ...b, logoDataUrl: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
+  }
+
+  return (
+    <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-10">
+      <header className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Listicle → Instagram
+          </h1>
+          <p className="text-zinc-400 mt-1 text-sm">
+            Paste a list article URL. Get a 1080×1350 carousel in the site's brand.
+          </p>
+        </div>
+        <button
+          onClick={async () => {
+            await fetch("/api/auth/logout", { method: "POST" });
+            window.location.href = "/login";
+          }}
+          className="text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2"
+        >
+          Sign out
+        </button>
+      </header>
+
+      <form onSubmit={handleExtract} className="flex gap-2 mb-6">
+        <input
+          type="url"
+          required
+          placeholder="https://www.screenrant.com/best-..."
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          className="flex-1 px-4 py-3 rounded-lg bg-zinc-900 border border-zinc-800 focus:border-zinc-600 outline-none"
+        />
+        <button
+          type="submit"
+          disabled={loading}
+          className="px-5 py-3 rounded-lg bg-white text-zinc-950 font-medium disabled:opacity-50"
+        >
+          {loading ? "Fetching…" : "Extract"}
+        </button>
+      </form>
+
+      {error && (
+        <div className="mb-6 p-4 rounded-lg bg-red-950/40 border border-red-800 text-red-200 text-sm">
+          {error}
+        </div>
+      )}
+
+      {extracted?.warning && (
+        <div className="mb-6 p-4 rounded-lg bg-amber-950/40 border border-amber-800 text-amber-200 text-sm">
+          {extracted.warning}
+        </div>
+      )}
+
+      {extracted && (
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
+          <section className="space-y-6">
+            <Panel title="Cover slide">
+              <textarea
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                rows={2}
+                placeholder="Cover title"
+                className="w-full px-3 py-2 rounded bg-zinc-900 border border-zinc-800 resize-none mb-3"
+              />
+              {extracted.heroImageUrl && (
+                <FocalPicker
+                  src={extracted.heroImageUrl}
+                  position={coverPosition}
+                  onChange={setCoverPosition}
+                  label="Hero crop focus"
+                />
+              )}
+            </Panel>
+
+            <Panel
+              title={`List items (${items.length})`}
+              action={
+                <button
+                  onClick={() =>
+                    setItems((prev) => [
+                      ...prev,
+                      { rank: prev.length + 1, heading: "", body: "", imageUrl: null },
+                    ])
+                  }
+                  className="text-xs px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700"
+                >
+                  + Add
+                </button>
+              }
+            >
+              <div className="space-y-3">
+                {items.map((it, i) => (
+                  <div
+                    key={i}
+                    className="p-3 rounded bg-zinc-900 border border-zinc-800 space-y-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={it.rank ?? ""}
+                        onChange={(e) =>
+                          updateItem(setItems, i, {
+                            rank: e.target.value ? Number(e.target.value) : null,
+                          })
+                        }
+                        className="w-16 px-2 py-1 rounded bg-zinc-950 border border-zinc-800 text-sm"
+                      />
+                      <input
+                        value={it.heading}
+                        onChange={(e) =>
+                          updateItem(setItems, i, { heading: e.target.value })
+                        }
+                        placeholder="Heading"
+                        className="flex-1 px-2 py-1 rounded bg-zinc-950 border border-zinc-800 text-sm font-medium"
+                      />
+                      <button
+                        onClick={() =>
+                          setItems((prev) => prev.filter((_, j) => j !== i))
+                        }
+                        className="text-xs text-zinc-500 hover:text-red-400 px-2"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <textarea
+                      value={it.body}
+                      onChange={(e) =>
+                        updateItem(setItems, i, { body: e.target.value })
+                      }
+                      rows={2}
+                      placeholder="Body (optional)"
+                      className="w-full px-2 py-1 rounded bg-zinc-950 border border-zinc-800 text-sm resize-none"
+                    />
+                    {it.imageUrl && (
+                      <FocalPicker
+                        src={it.imageUrl}
+                        position={it.imagePosition ?? DEFAULT_POSITION}
+                        onChange={(p) =>
+                          updateItem(setItems, i, { imagePosition: p })
+                        }
+                      />
+                    )}
+                  </div>
+                ))}
+                {items.length === 0 && (
+                  <p className="text-sm text-zinc-500">
+                    No items yet. Add some manually.
+                  </p>
+                )}
+              </div>
+            </Panel>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handlePreview}
+                disabled={previewing || !slides.length}
+                className="px-4 py-2 rounded bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50"
+              >
+                {previewing ? "Rendering…" : "Preview slides"}
+              </button>
+              <button
+                onClick={handleDownload}
+                disabled={downloading || !slides.length}
+                className="px-4 py-2 rounded bg-white text-zinc-950 font-medium disabled:opacity-50"
+              >
+                {downloading ? "Packaging…" : `Download ZIP (${slides.length})`}
+              </button>
+            </div>
+
+            {previews.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {previews.map((src, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={i}
+                    src={src}
+                    alt={`Slide ${i + 1}`}
+                    className="w-full rounded border border-zinc-800"
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+
+          <aside className="space-y-6">
+            <Panel title="Branding">
+              <div className="space-y-3 text-sm">
+                <Field label="Site name">
+                  <input
+                    value={brand.siteName}
+                    onChange={(e) =>
+                      setBrand({ ...brand, siteName: e.target.value })
+                    }
+                    className="w-full px-2 py-1 rounded bg-zinc-900 border border-zinc-800"
+                  />
+                </Field>
+                <Field label="Accent color">
+                  <ColorField
+                    value={brand.accentColor}
+                    onChange={(v) => setBrand({ ...brand, accentColor: v })}
+                  />
+                </Field>
+                <Field label="Background">
+                  <ColorField
+                    value={brand.bgColor}
+                    onChange={(v) => setBrand({ ...brand, bgColor: v })}
+                  />
+                </Field>
+                <Field label="Text">
+                  <ColorField
+                    value={brand.textColor}
+                    onChange={(v) => setBrand({ ...brand, textColor: v })}
+                  />
+                </Field>
+                <Field label="Detected font">
+                  <div className="text-zinc-400 text-xs">
+                    {brand.fontFamily} — rendered as Inter (font licensing)
+                  </div>
+                </Field>
+                <Field label="Logo">
+                  <div className="space-y-2">
+                    {(brand.logoDataUrl || brand.logoUrl) && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={brand.logoDataUrl ?? brand.logoUrl ?? ""}
+                        alt="Logo"
+                        className="h-8 bg-zinc-800 rounded p-1"
+                      />
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleLogoUpload}
+                      className="text-xs"
+                    />
+                    {brand.logoDataUrl && (
+                      <button
+                        onClick={() =>
+                          setBrand({ ...brand, logoDataUrl: null })
+                        }
+                        className="text-xs text-zinc-500 hover:text-zinc-300"
+                      >
+                        Reset to auto-detected
+                      </button>
+                    )}
+                  </div>
+                </Field>
+              </div>
+            </Panel>
+          </aside>
+        </div>
+      )}
+    </main>
+  );
+}
+
+function Panel({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-lg bg-zinc-900/50 border border-zinc-800 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
+          {title}
+        </h2>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-xs text-zinc-500 mb-1">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function ColorField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex gap-2">
+      <input
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-8 w-12 rounded bg-zinc-900 border border-zinc-800 cursor-pointer"
+      />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="flex-1 px-2 py-1 rounded bg-zinc-900 border border-zinc-800 font-mono text-xs"
+      />
+    </div>
+  );
+}
+
+function updateItem(
+  setItems: React.Dispatch<React.SetStateAction<ListItem[]>>,
+  index: number,
+  patch: Partial<ListItem>,
+) {
+  setItems((prev) =>
+    prev.map((it, i) => (i === index ? { ...it, ...patch } : it)),
+  );
+}
+
+function buildSlides(
+  extracted: ExtractResult,
+  title: string,
+  items: ListItem[],
+  brand: BrandConfig,
+  coverPosition: ImagePosition,
+) {
+  const common = {
+    accentColor: brand.accentColor,
+    textColor: brand.textColor,
+    bgColor: brand.bgColor,
+    fontFamily: brand.fontFamily,
+    siteName: brand.siteName,
+    logoUrl: brand.logoUrl,
+    logoDataUrl: brand.logoDataUrl,
+  };
+  return [
+    {
+      ...common,
+      kind: "cover" as const,
+      title,
+      subtitle: extracted.subtitle,
+      totalCount: items.length,
+      heroImageUrl: extracted.heroImageUrl,
+      imagePosition: coverPosition,
+    },
+    ...items.map((it) => ({
+      ...common,
+      kind: "item" as const,
+      rank: it.rank,
+      heading: it.heading,
+      body: it.body,
+      itemImageUrl: it.imageUrl,
+      imagePosition: it.imagePosition ?? DEFAULT_POSITION,
+    })),
+    {
+      ...common,
+      kind: "outro" as const,
+      ctaText: "Read the full article",
+      sourceUrl: extracted.url,
+    },
+  ];
+}
+
+function FocalPicker({
+  src,
+  position,
+  onChange,
+  label,
+}: {
+  src: string;
+  position: ImagePosition;
+  onChange: (p: ImagePosition) => void;
+  label?: string;
+}) {
+  function setFromEvent(e: React.MouseEvent<HTMLDivElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+    onChange({ x: Math.round(x), y: Math.round(y) });
+  }
+  return (
+    <div className="flex items-start gap-3">
+      <div
+        className="relative cursor-crosshair bg-zinc-950 rounded border border-zinc-800 overflow-hidden select-none"
+        style={{ width: 80, aspectRatio: "1080 / 1350" }}
+        onClick={setFromEvent}
+        onMouseDown={(e) => {
+          setFromEvent(e);
+          const move = (ev: MouseEvent) => {
+            const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+            const x = Math.max(0, Math.min(100, ((ev.clientX - rect.left) / rect.width) * 100));
+            const y = Math.max(0, Math.min(100, ((ev.clientY - rect.top) / rect.height) * 100));
+            onChange({ x: Math.round(x), y: Math.round(y) });
+          };
+          const up = () => {
+            window.removeEventListener("mousemove", move);
+            window.removeEventListener("mouseup", up);
+          };
+          window.addEventListener("mousemove", move);
+          window.addEventListener("mouseup", up);
+        }}
+        title="Click or drag to set focal point"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt=""
+          draggable={false}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            objectPosition: `${position.x}% ${position.y}%`,
+            pointerEvents: "none",
+          }}
+        />
+        <div
+          className="absolute w-3 h-3 rounded-full bg-white ring-2 ring-zinc-950 pointer-events-none"
+          style={{
+            left: `${position.x}%`,
+            top: `${position.y}%`,
+            transform: "translate(-50%, -50%)",
+          }}
+        />
+      </div>
+      <div className="text-xs text-zinc-400 space-y-1 pt-1">
+        <div>{label ?? "Crop focus"}</div>
+        <div className="font-mono text-zinc-500">
+          {Math.round(position.x)} · {Math.round(position.y)}
+        </div>
+        <button
+          onClick={() => onChange(DEFAULT_POSITION)}
+          className="text-zinc-500 hover:text-zinc-300 underline underline-offset-2"
+          type="button"
+        >
+          Reset
+        </button>
+      </div>
+    </div>
+  );
+}
