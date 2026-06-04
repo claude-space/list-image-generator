@@ -37,9 +37,43 @@ async function resolveImage(
   inlineDataUrl: string | null | undefined,
   url: string | null | undefined,
 ): Promise<string | null> {
-  if (inlineDataUrl && inlineDataUrl.startsWith("data:")) return inlineDataUrl;
+  if (inlineDataUrl && inlineDataUrl.startsWith("data:")) {
+    return await normalizeDataUrl(inlineDataUrl);
+  }
   if (url) return await urlToDataUrl(url);
   return null;
+}
+
+/**
+ * Strip a data URL into a satori-safe data URL.
+ *
+ * Browser file pickers happily accept WebP, AVIF, HEIC, SVG, etc. — satori
+ * can only decode PNG/JPEG/GIF reliably, and crashes with a cryptic
+ * "u is not iterable" on anything else. We re-encode unsupported formats
+ * to JPEG via sharp before handing the result back. PNG/JPEG/GIF pass
+ * through untouched to avoid a needless transcode round-trip.
+ */
+async function normalizeDataUrl(dataUrl: string): Promise<string | null> {
+  // No `s` flag — base64 payloads don't contain newlines, and the flag
+  // requires lib es2018+ which our tsconfig predates.
+  const m = dataUrl.match(/^data:([^;,]+)(;base64)?,([\s\S]*)$/);
+  if (!m) return null;
+  const mime = m[1].toLowerCase().trim();
+  const isBase64 = !!m[2];
+  if (mime === "image/jpeg" || mime === "image/png" || mime === "image/gif") {
+    return dataUrl;
+  }
+  try {
+    const payload = m[3];
+    const buf = isBase64
+      ? Buffer.from(payload, "base64")
+      : Buffer.from(decodeURIComponent(payload));
+    const sharpMod = await import("sharp");
+    const jpeg = await sharpMod.default(buf).jpeg({ quality: 88 }).toBuffer();
+    return `data:image/jpeg;base64,${jpeg.toString("base64")}`;
+  } catch {
+    return null;
+  }
 }
 
 async function prepareSlide(s: SlideInput): Promise<RenderConfig> {
