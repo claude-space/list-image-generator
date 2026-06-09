@@ -24,6 +24,18 @@ function defaultSummaryStyleFor(domain: string | null | undefined): SummaryStyle
   return "ranked";
 }
 
+/**
+ * Whether to reverse the list by default for this publisher. TheGamer
+ * structures most ranking articles as countdowns (#10 listed first, #1
+ * last) — extracting in DOM order would otherwise put their #10 at the
+ * top of the summary. Users can still flip the toggle per-article.
+ */
+function defaultReverseOrderFor(domain: string | null | undefined): boolean {
+  if (!domain) return false;
+  if (/(^|\.)thegamer\.com$/i.test(domain)) return true;
+  return false;
+}
+
 const DEFAULT_BG = "#0b0b0c";
 const DEFAULT_TEXT = "#ffffff";
 const DEFAULT_ACCENT = "#e11d48";
@@ -47,6 +59,9 @@ export default function Home() {
   const [coverPosition, setCoverPosition] = useState<ImagePosition>(DEFAULT_POSITION);
   const [includeSummary, setIncludeSummary] = useState(true);
   const [summaryStyle, setSummaryStyle] = useState<SummaryStyle>("ranked");
+  // When true, items + summary entries render in DOM-reverse order with
+  // ranks re-numbered 1..N. Default ON for TheGamer-style countdown articles.
+  const [reverseListOrder, setReverseListOrder] = useState(false);
   // Hero-overlay summary: which image fills the backdrop, plus focal point.
   // "article" = article hero, "entry-N" = items[N].imageUrl, "custom" = uploaded.
   const [summaryHeroChoice, setSummaryHeroChoice] = useState<string>("article");
@@ -111,6 +126,7 @@ export default function Home() {
       // Pick a summary layout based on the source publisher. The user can
       // still override below, but this lands them on the "right" default.
       setSummaryStyle(defaultSummaryStyleFor(result.branding.domain));
+      setReverseListOrder(defaultReverseOrderFor(result.branding.domain));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
     } finally {
@@ -143,6 +159,7 @@ export default function Home() {
       includeSummary,
       summaryStyle,
       { hero: summaryHero, position: summaryHeroPosition },
+      reverseListOrder,
     );
   }, [
     extracted,
@@ -154,6 +171,7 @@ export default function Home() {
     summaryStyle,
     summaryHero,
     summaryHeroPosition,
+    reverseListOrder,
   ]);
 
   function handleSummaryHeroUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -368,6 +386,19 @@ export default function Home() {
               <p className="text-xs text-zinc-500 mt-1 ml-6">
                 A single graphic with every entry. Drops in between the entry
                 slides and the outro.
+              </p>
+              <label className="mt-3 flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={reverseListOrder}
+                  onChange={(e) => setReverseListOrder(e.target.checked)}
+                  className="accent-white"
+                />
+                Reverse list order (#1 last → #1 first)
+              </label>
+              <p className="text-xs text-zinc-500 mt-1 ml-6">
+                Use for countdown articles where the article reveals #1 last.
+                Defaults on for TheGamer.
               </p>
               {includeSummary && (
                 <div className="mt-2 ml-6 space-y-3">
@@ -911,7 +942,15 @@ function buildSlides(
     hero: { url: string | null; dataUrl: string | null };
     position: ImagePosition;
   },
+  reverseListOrder: boolean,
 ) {
+  // Flip the array and renumber so the displayed rank always matches the
+  // visual position (top = #1). Items stay in editable order in state; the
+  // reversal only happens at slide-build time so the user can toggle the
+  // checkbox and see the previews flip without touching state.
+  const orderedItems = reverseListOrder
+    ? items.slice().reverse().map((it, i) => ({ ...it, rank: i + 1 }))
+    : items;
   const common = {
     accentColor: brand.accentColor,
     textColor: brand.textColor,
@@ -931,7 +970,7 @@ function buildSlides(
       heroImageUrl: extracted.heroImageUrl,
       imagePosition: coverPosition,
     },
-    ...items.map((it) => ({
+    ...orderedItems.map((it) => ({
       ...common,
       kind: "item" as const,
       rank: it.rank,
@@ -960,7 +999,7 @@ function buildSlides(
       heroImageUrl: summary.hero.url,
       heroImageDataUrl: summary.hero.dataUrl,
       imagePosition: summary.position,
-      summaryEntries: items.map((it) => ({
+      summaryEntries: orderedItems.map((it) => ({
         rank: it.rank,
         heading: it.heading,
         imageUrl: it.imageUrl,
