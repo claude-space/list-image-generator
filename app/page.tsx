@@ -431,47 +431,22 @@ export default function Home() {
                   {(summaryStyle === "hero-overlay" ||
                     summaryStyle === "ranked-overlay") && (
                     <div>
-                      <label className="block text-xs text-zinc-500 mb-1">
+                      <label className="block text-xs text-zinc-500 mb-2">
                         Summary background image
                       </label>
-                      <select
-                        value={summaryHeroChoice}
-                        onChange={(e) => {
-                          setSummaryHeroChoice(e.target.value);
+                      <SummaryHeroTilePicker
+                        choice={summaryHeroChoice}
+                        articleHero={extracted.heroImageUrl}
+                        items={items}
+                        customDataUrl={summaryCustomHero}
+                        accentColor={brand.accentColor}
+                        onSelect={(next) => {
+                          setSummaryHeroChoice(next);
                           setSummaryHeroPosition(DEFAULT_POSITION);
                         }}
-                        className="w-full px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-xs"
-                      >
-                        <option value="article">Article hero</option>
-                        {items.map((it, i) => (
-                          <option key={i} value={`entry-${i}`}>
-                            #{it.rank ?? i + 1}:{" "}
-                            {it.heading.length > 40
-                              ? it.heading.slice(0, 40) + "…"
-                              : it.heading}
-                          </option>
-                        ))}
-                        <option value="custom">Upload custom…</option>
-                      </select>
-                      {summaryHeroChoice === "custom" && (
-                        <div className="mt-2 space-y-2">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleSummaryHeroUpload}
-                            className="text-xs"
-                          />
-                          {summaryCustomHero && (
-                            <button
-                              onClick={() => setSummaryCustomHero(null)}
-                              className="text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2"
-                              type="button"
-                            >
-                              Clear upload
-                            </button>
-                          )}
-                        </div>
-                      )}
+                        onUpload={handleSummaryHeroUpload}
+                        onClearUpload={() => setSummaryCustomHero(null)}
+                      />
                       {(summaryHero.dataUrl ?? summaryHero.url) && (
                         <div className="mt-3">
                           <FocalPicker
@@ -1019,6 +994,153 @@ function buildSlides(
     sourceUrl: extracted.url,
   });
   return slides;
+}
+
+/**
+ * Visual picker for the summary slide's background image. Shows every
+ * candidate image — the article hero + each entry's image + a custom-upload
+ * tile — as a clickable grid of 1080:1350-aspect thumbnails. The selected
+ * tile gets an accent-color ring so the current pick is obvious.
+ *
+ * Replaces the earlier hidden-in-a-dropdown UX; users were missing it
+ * because it didn't surface the actual options visually.
+ */
+function SummaryHeroTilePicker({
+  choice,
+  articleHero,
+  items,
+  customDataUrl,
+  accentColor,
+  onSelect,
+  onUpload,
+  onClearUpload,
+}: {
+  choice: string;
+  articleHero: string | null;
+  items: ListItem[];
+  customDataUrl: string | null;
+  accentColor: string;
+  onSelect: (next: string) => void;
+  onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onClearUpload: () => void;
+}) {
+  type Tile = { key: string; label: string; src: string | null };
+  const tiles: Tile[] = [
+    { key: "article", label: "Article hero", src: articleHero },
+    ...items.map((it, i) => ({
+      key: `entry-${i}`,
+      label: `#${it.rank ?? i + 1}`,
+      src: it.imageDataUrl ?? it.imageUrl,
+    })),
+  ];
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(72px,1fr))] gap-2">
+        {tiles.map((t) => {
+          const selected = choice === t.key;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => onSelect(t.key)}
+              title={t.label}
+              className={
+                "relative bg-zinc-950 rounded overflow-hidden border transition-colors " +
+                (selected
+                  ? "border-transparent ring-2"
+                  : "border-zinc-800 hover:border-zinc-600")
+              }
+              style={{
+                aspectRatio: "1080 / 1350",
+                outlineColor: selected ? accentColor : undefined,
+                // ring-2 with arbitrary color via inline boxShadow so we can
+                // use the dynamic brand accent rather than a hardcoded class.
+                boxShadow: selected ? `0 0 0 2px ${accentColor}` : undefined,
+              }}
+            >
+              {t.src ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={t.src}
+                  alt=""
+                  draggable={false}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    pointerEvents: "none",
+                  }}
+                />
+              ) : (
+                <span className="absolute inset-0 grid place-items-center text-[10px] text-zinc-500">
+                  no image
+                </span>
+              )}
+              <span
+                className="absolute bottom-0 left-0 right-0 text-[9px] uppercase tracking-wide text-white px-1 py-0.5"
+                style={{ background: "rgba(0,0,0,0.65)" }}
+              >
+                {t.label}
+              </span>
+            </button>
+          );
+        })}
+        {/* Upload tile — always last so it doesn't shift when items change. */}
+        <label
+          className={
+            "relative bg-zinc-950 rounded overflow-hidden border cursor-pointer transition-colors " +
+            (choice === "custom"
+              ? "border-transparent"
+              : "border-zinc-800 hover:border-zinc-600")
+          }
+          style={{
+            aspectRatio: "1080 / 1350",
+            boxShadow:
+              choice === "custom" ? `0 0 0 2px ${accentColor}` : undefined,
+          }}
+          title="Upload custom"
+        >
+          {choice === "custom" && customDataUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={customDataUrl}
+              alt=""
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (
+            <span className="absolute inset-0 grid place-items-center text-2xl text-zinc-500">
+              +
+            </span>
+          )}
+          <span
+            className="absolute bottom-0 left-0 right-0 text-[9px] uppercase tracking-wide text-white px-1 py-0.5 text-center"
+            style={{ background: "rgba(0,0,0,0.65)" }}
+          >
+            Upload
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              onSelect("custom");
+              onUpload(e);
+            }}
+          />
+        </label>
+      </div>
+      {choice === "custom" && customDataUrl && (
+        <button
+          onClick={onClearUpload}
+          className="text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2"
+          type="button"
+        >
+          Clear upload
+        </button>
+      )}
+    </div>
+  );
 }
 
 function FocalPicker({
