@@ -741,21 +741,38 @@ function SummaryRankedOverlay(cfg: RenderConfig) {
               gap: 8,
             },
             children: [
-              cfg.siteName && {
-                type: "div",
-                props: {
-                  style: {
-                    display: "flex",
-                    fontSize: 26,
-                    fontWeight: 800,
-                    letterSpacing: 4,
-                    color: "#fff",
-                    textTransform: "uppercase",
-                    opacity: 0.92,
+              // Logo image (same asset used on the carousel slides). Falls
+              // back to a text wordmark only when no logo data URL exists.
+              cfg.logoDataUrl
+                ? {
+                    type: "img",
+                    props: {
+                      src: cfg.logoDataUrl,
+                      width: 360,
+                      height: 88,
+                      style: {
+                        width: 360,
+                        height: 88,
+                        objectFit: "contain",
+                        objectPosition: "left center",
+                      },
+                    },
+                  }
+                : cfg.siteName && {
+                    type: "div",
+                    props: {
+                      style: {
+                        display: "flex",
+                        fontSize: 26,
+                        fontWeight: 800,
+                        letterSpacing: 4,
+                        color: "#fff",
+                        textTransform: "uppercase",
+                        opacity: 0.92,
+                      },
+                      children: cfg.siteName,
+                    },
                   },
-                  children: cfg.siteName,
-                },
-              },
               {
                 type: "div",
                 props: {
