@@ -18,7 +18,6 @@ You can pin `start.bat` to the taskbar, send it to the desktop as a shortcut, or
 2. **Pulls list items + branding** — title, list entries (numbered h2/h3, ranked lists, or `<ol>` items), hero image, site logo, dominant brand color sampled from the logo
 3. **Lets you edit** — title, items, brand color, logo upload, focal point on each image (click anywhere on the small crop preview to retarget)
 4. **Renders the carousel** — cover + one slide per item + summary + outro, all 1080×1350 PNGs zipped for download
-5. **Generates Facebook copy** — three on-brand post variants via Claude (you supply your own Anthropic API key)
 
 ## Manual mode
 
@@ -82,5 +81,4 @@ you need to restrict access, do it at the deployment layer:
 - `app/lib/extractColor.ts` — sharp-based dominant-color extractor for logos (incl. SVG rasterization)
 - `app/lib/fetchHtml.ts` — two-stage fetch (plain → Playwright fallback)
 - `app/lib/rateLimit.ts` — in-memory per-IP throttle on /api/extract + /api/render
-- `app/lib/ai/social-copy.ts` — Anthropic SDK call for Facebook copy variants
 - `public/fonts/` — bundled Inter Regular/Bold/Black for satori
