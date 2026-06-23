@@ -22,7 +22,10 @@ module.exports = {
       max_memory_restart: "1G",
       env: {
         NODE_ENV: "production",
-        PORT: "3103",
+        // Port 3103 was originally chosen but is taken by another agent
+        // (adops-analysis) on this shared VM. 3134 is the first free port
+        // above the existing 3100-3133 cluster.
+        PORT: "3134",
         // basePath is also baked in at build time (next.config.ts reads
         // BASE_PATH from the env). Set the same value here so runtime
         // logs / fetches that read it agree with the build.
