@@ -11,6 +11,14 @@ const basePath = "/agents/list-image-generator";
 
 const nextConfig: NextConfig = {
   basePath,
+  // shellagent.io's Caddy canonicalizes the basePath to a trailing slash
+  // (302: /agents/list-image-generator -> /agents/list-image-generator/).
+  // Next.js defaults to stripping it (308 the other direction), which
+  // produces an infinite redirect loop on the homepage. Setting this to
+  // true makes Next agree with Caddy: homepage serves at /.../ and the
+  // bare path 308s into it. API routes also pick up the slash via the
+  // same 308, which preserves POST method + body.
+  trailingSlash: true,
   // Surface the same value to client components via process.env at build
   // time. Used by client-side fetch() calls in page.tsx to prefix
   // `/api/...` URLs; without this they'd hit the bare domain root and 404
