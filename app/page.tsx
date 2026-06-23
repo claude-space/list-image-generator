@@ -306,24 +306,13 @@ export default function Home() {
 
   return (
     <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-10">
-      <header className="mb-8 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Listicle → Instagram
-          </h1>
-          <p className="text-zinc-400 mt-1 text-sm">
-            Paste a list article URL. Get a 1080×1350 carousel in the site's brand.
-          </p>
-        </div>
-        <button
-          onClick={async () => {
-            await fetch("/api/auth/logout", { method: "POST" });
-            window.location.href = "/login";
-          }}
-          className="text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2"
-        >
-          Sign out
-        </button>
+      <header className="mb-8">
+        <h1 className="text-3xl font-bold tracking-tight">
+          Listicle → Instagram
+        </h1>
+        <p className="text-zinc-400 mt-1 text-sm">
+          Paste a list article URL. Get a 1080×1350 carousel in the site's brand.
+        </p>
       </header>
 
       <form onSubmit={handleExtract} className="flex gap-2 mb-6">
