@@ -13,6 +13,13 @@ import { generateFacebookCopy } from "./lib/ai/social-copy";
 const DEFAULT_POSITION: ImagePosition = { x: 50, y: 50 };
 const ANTHROPIC_KEY_STORAGE = "anthropic-api-key";
 
+// Same-origin API paths must be prefixed with the deploy's basePath
+// (shellagent.io serves each agent from `/user/agent/...`). Read at build
+// time via next.config.ts → env.NEXT_PUBLIC_BASE_PATH. Empty string in local
+// dev / on a domain root.
+const API_BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+const api = (path: string) => `${API_BASE}${path}`;
+
 /**
  * Per-publisher summary-style preferences. GameRant uses the hero-overlay
  * layout (full-bleed photo + white pill cards); everyone else gets the
@@ -102,7 +109,7 @@ export default function Home() {
     setSummaryCustomHero(null);
     setSummaryHeroPosition(DEFAULT_POSITION);
     try {
-      const r = await fetch("/api/extract", {
+      const r = await fetch(api("/api/extract"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
@@ -210,7 +217,7 @@ export default function Home() {
     try {
       const results: string[] = [];
       for (let i = 0; i < slides.length; i++) {
-        const r = await fetch("/api/render", {
+        const r = await fetch(api("/api/render"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -239,7 +246,7 @@ export default function Home() {
     setDownloading(true);
     setError(null);
     try {
-      const r = await fetch("/api/render", {
+      const r = await fetch(api("/api/render"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slides, format: "zip" }),

@@ -31,33 +31,42 @@ npm run dev                        # development (hot reload)
 npm run build && npm start         # production
 ```
 
-## Deploying to Render
+## Deploying to shellagent.io
 
-The app is containerized and ready to deploy as a Docker web service on Render.
+The app deploys to a shellagent.io GCP VM via SSH + PM2. The `deploy-to-vm`
+skill in the parent agent folder handles git pull, build, and PM2 restart.
 
-1. Push the repo to GitHub (or any Render-supported Git host).
-2. In Render's dashboard: **New → Blueprint → connect the repo**. Render reads
-   `render.yaml` and provisions the service.
-3. Wait ~5 minutes for the Docker build. The first build is slow because it
-   downloads Chromium (~150MB). Subsequent builds reuse layers.
+**First-time setup** (per VM, one time):
 
-Your app lands at `https://<service-name>.onrender.com`.
+```bash
+ssh -i ~/.ssh/<key> trevor@shellagent.io \
+  "git clone <repo> ~/list-image-generator && \
+   cd ~/list-image-generator && \
+   npm install && \
+   npx playwright install --with-deps chromium"
+```
+
+**Subsequent deploys** (after each git push):
+
+```bash
+ssh -i ~/.ssh/<key> trevor@shellagent.io \
+  "cd ~/list-image-generator && \
+   git pull origin main && \
+   npm install --production && \
+   BASE_PATH=/trevor-ford/list-image-generator npm run build && \
+   pm2 restart ecosystem.config.js || pm2 start ecosystem.config.js"
+```
+
+Your app lands at `https://shellagent.io/trevor-ford/list-image-generator/`.
 
 ### Access control
 
 The app has no built-in auth — anyone who can reach the URL can use it. If
 you need to restrict access, do it at the deployment layer:
 
-- Render IP allow-list (Settings → Security)
 - Cloudflare Access in front of the service
 - Company VPN / Tailscale
-- Render's own platform-level auth if/when available
-
-### Cost notes
-
-- Render's `starter` plan ($7/mo) keeps the container always-on, no cold starts.
-- The free tier sleeps after 15 min idle and takes ~30s to wake — fine for
-  light personal use, painful during demos.
+- shellagent.io's per-user URL prefix already provides some obscurity
 
 ## Project layout
 
