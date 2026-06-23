@@ -53,11 +53,11 @@ ssh -i ~/.ssh/<key> trevor@shellagent.io \
   "cd ~/list-image-generator && \
    git pull origin main && \
    npm install --production && \
-   BASE_PATH=/trevor-ford/list-image-generator npm run build && \
+   BASE_PATH=/agents/list-image-generator npm run build && \
    pm2 restart ecosystem.config.js || pm2 start ecosystem.config.js"
 ```
 
-Your app lands at `https://shellagent.io/trevor-ford/list-image-generator/`.
+Your app lands at `https://shellagent.io/agents/list-image-generator/`.
 
 ### Access control
 

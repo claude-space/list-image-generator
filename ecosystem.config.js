@@ -29,8 +29,8 @@ module.exports = {
         // basePath is also baked in at build time (next.config.ts reads
         // BASE_PATH from the env). Set the same value here so runtime
         // logs / fetches that read it agree with the build.
-        BASE_PATH: "/trevor-ford/list-image-generator",
-        NEXT_PUBLIC_BASE_PATH: "/trevor-ford/list-image-generator",
+        BASE_PATH: "/agents/list-image-generator",
+        NEXT_PUBLIC_BASE_PATH: "/agents/list-image-generator",
       },
     },
   ],
