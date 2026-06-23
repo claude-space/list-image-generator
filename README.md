@@ -33,29 +33,33 @@ npm run build && npm start         # production
 
 ## Deploying to shellagent.io
 
-The app deploys to a shellagent.io GCP VM via SSH + PM2. The `deploy-to-vm`
-skill in the parent agent folder handles git pull, build, and PM2 restart.
+The app runs on a shellagent.io GCP VM under **systemd** (NOT PM2). The
+unit `shellagent-trevor-ford-list-image-generator.service` listens on the
+provisioner-assigned port 3133; Caddy routes `/agents/list-image-generator/*`
+to it. The `deploy-to-vm` skill in the parent agent folder handles ongoing
+deploys.
 
-**First-time setup** (per VM, one time):
-
-```bash
-ssh -i ~/.ssh/<key> trevor@shellagent.io \
-  "git clone <repo> ~/list-image-generator && \
-   cd ~/list-image-generator && \
-   npm install && \
-   npx playwright install --with-deps chromium"
-```
-
-**Subsequent deploys** (after each git push):
+**First-time provisioning** is done by the VM admin via
+`/opt/shellagent/provision-user.sh` — that creates the systemd unit, allocates
+the port, and adds the Caddy route. After that, ongoing deploys are SSH-only:
 
 ```bash
-ssh -i ~/.ssh/<key> trevor@shellagent.io \
+ssh -i ~/.ssh/<key> trevor-ford@<vm-host> \
   "cd ~/list-image-generator && \
    git pull origin main && \
-   npm install --production && \
-   BASE_PATH=/agents/list-image-generator npm run build && \
-   pm2 restart ecosystem.config.js || pm2 start ecosystem.config.js"
+   npm install && \
+   npm run build && \
+   kill \$(systemctl show shellagent-trevor-ford-list-image-generator -p MainPID --value)"
+# systemd auto-respawns with the new build (Restart=always)
 ```
+
+Notes:
+- Don't pass `--production` to `npm install` — the Next build needs Tailwind
+  PostCSS + TypeScript from devDependencies.
+- basePath (`/agents/list-image-generator`) is hardcoded in `next.config.ts`,
+  not env-driven. Next.js re-reads the config at runtime and systemd's
+  Environment block is empty, so an env-driven version would collapse to `""`.
+- Verify the deploy by curling `/api/health` under the agent prefix.
 
 Your app lands at `https://shellagent.io/agents/list-image-generator/`.
 
