@@ -1,10 +1,13 @@
 import type { NextConfig } from "next";
 
-// shellagent.io serves each agent from a user-prefixed sub-path
-// (e.g. /trevor-ford/list-image-generator). The `basePath` is baked into the
-// build at `npm run build` time via the BASE_PATH env var. Unset locally →
-// app serves from `/`.
-const basePath = process.env.BASE_PATH || "";
+// shellagent.io's Caddy router serves this agent at /agents/list-image-generator.
+// Hardcoded rather than env-driven because Next.js re-reads next.config.ts at
+// runtime — an env var would have to be set in both the build command AND the
+// systemd unit's Environment block (which is root-owned). Hardcoding is fine
+// for a single-deployment app; local dev `npm run dev` still works since
+// Next.js serves the home page at /agents/list-image-generator/ locally too
+// (browse to http://localhost:3000/agents/list-image-generator/).
+const basePath = "/agents/list-image-generator";
 
 const nextConfig: NextConfig = {
   basePath,
