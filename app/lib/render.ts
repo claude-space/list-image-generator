@@ -279,9 +279,15 @@ function FullBleedSlide(opts: {
         // Push the top-center block down slightly so it lands in the top
         // third rather than hugging the padded edge.
         marginTop: isTopCenter ? 90 : 0,
-        // Constrain centered text width so long titles wrap cleanly instead
-        // of running the full slide width.
-        maxWidth: isTopCenter ? SLIDE_W - 220 : undefined,
+        // For top-center: constrain width so long titles wrap cleanly, and
+        // center the whole block within the padded content column (the
+        // outer flex is column so alignSelf is the horizontal axis here).
+        // Without alignSelf the block would default to stretch/flex-start
+        // and land against the left padding — the text would look centered
+        // inside its own box but off-center on the slide.
+        ...(isTopCenter
+          ? { alignSelf: "center", maxWidth: SLIDE_W - 220 }
+          : {}),
       },
       children: bottom,
     },
