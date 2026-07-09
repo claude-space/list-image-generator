@@ -6,6 +6,7 @@ import type {
   BrandConfig,
   ListItem,
   ImagePosition,
+  SlideTextPosition,
   SummaryStyle,
 } from "./types";
 
@@ -42,6 +43,17 @@ function defaultReverseOrderFor(domain: string | null | undefined): boolean {
   return false;
 }
 
+/**
+ * Where the title/heading sits on cover + item slides. GameRant runs their
+ * covers with the title centered up top and the logo bottom-left; every
+ * other publisher gets the default bottom-anchored layout. User-overridable.
+ */
+function defaultSlideTextPositionFor(domain: string | null | undefined): SlideTextPosition {
+  if (!domain) return "bottom";
+  if (/(^|\.)gamerant\.com$/i.test(domain)) return "top-center";
+  return "bottom";
+}
+
 const DEFAULT_BG = "#0b0b0c";
 const DEFAULT_TEXT = "#ffffff";
 const DEFAULT_ACCENT = "#e11d48";
@@ -61,6 +73,7 @@ export default function Home() {
     fontFamily: "Inter",
     logoDataUrl: null,
     logoUrl: null,
+    slideTextPosition: "bottom",
   });
   const [coverPosition, setCoverPosition] = useState<ImagePosition>(DEFAULT_POSITION);
   const [includeSummary, setIncludeSummary] = useState(true);
@@ -111,6 +124,7 @@ export default function Home() {
         // have to re-resolve a CDN-fronted URL at render time.
         logoDataUrl: result.branding.logoDataUrl,
         logoUrl: result.branding.logoUrl,
+        slideTextPosition: defaultSlideTextPositionFor(result.branding.domain),
       });
       // Pick a summary layout based on the source publisher. The user can
       // still override below, but this lands them on the "right" default.
@@ -319,6 +333,32 @@ export default function Home() {
                   label="Hero crop focus"
                 />
               )}
+              <div className="mt-4">
+                <label className="block text-xs text-zinc-500 mb-1">
+                  Cover &amp; entry text position
+                </label>
+                <select
+                  value={brand.slideTextPosition}
+                  onChange={(e) =>
+                    setBrand({
+                      ...brand,
+                      slideTextPosition: e.target.value as SlideTextPosition,
+                    })
+                  }
+                  className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-xs"
+                >
+                  <option value="bottom">
+                    Bottom — text bottom, logo top-right (default)
+                  </option>
+                  <option value="top-center">
+                    Top center — text top third, logo bottom-left (GameRant)
+                  </option>
+                </select>
+                <p className="text-xs text-zinc-600 mt-1">
+                  Applies to the cover and every entry slide. Defaults to
+                  top-center for GameRant.
+                </p>
+              </div>
               <label className="mt-4 flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
                 <input
                   type="checkbox"
@@ -780,6 +820,7 @@ function buildSlides(
       totalCount: items.length,
       heroImageUrl: extracted.heroImageUrl,
       imagePosition: coverPosition,
+      slideTextPosition: brand.slideTextPosition,
     },
     ...orderedItems.map((it) => ({
       ...common,
@@ -792,6 +833,7 @@ function buildSlides(
       itemImageUrl: it.imageUrl,
       itemImageDataUrl: it.imageDataUrl ?? null,
       imagePosition: it.imagePosition ?? DEFAULT_POSITION,
+      slideTextPosition: brand.slideTextPosition,
     })),
   ];
   // Summary belongs between the entry slides and the outro: viewers see the

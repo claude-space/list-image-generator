@@ -118,6 +118,7 @@ async function prepareSlide(s: SlideInput): Promise<RenderConfig> {
     itemImageDataUrl: itemImg,
     summaryEntries,
     imagePosition: s.imagePosition ?? null,
+    slideTextPosition: s.slideTextPosition,
   };
 }
 

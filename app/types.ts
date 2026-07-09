@@ -20,6 +20,16 @@ export type SummaryEntry = {
 
 export type SummaryStyle = "ranked" | "hero-overlay" | "ranked-overlay";
 
+/**
+ * Where the title/heading text sits on cover and item slides.
+ *  - "bottom"     (default): text anchored bottom-third, logo top-right, dark
+ *                            gradient scrim strongest at the bottom.
+ *  - "top-center":           text centered horizontally in the top third,
+ *                            logo bottom-left, scrim strongest at the top.
+ *                            GameRant's editorial house style.
+ */
+export type SlideTextPosition = "bottom" | "top-center";
+
 export type ListItem = {
   rank: number | null;
   heading: string;
@@ -50,4 +60,5 @@ export type BrandConfig = {
   fontFamily: string;
   logoDataUrl: string | null;
   logoUrl: string | null;
+  slideTextPosition: SlideTextPosition;
 };

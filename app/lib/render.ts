@@ -36,6 +36,8 @@ export type SummaryEntry = {
  */
 export type SummaryStyle = "ranked" | "hero-overlay" | "ranked-overlay";
 
+export type SlideTextPosition = "bottom" | "top-center";
+
 export type RenderConfig = {
   kind: SlideKind;
   // Cover fields
@@ -57,6 +59,8 @@ export type RenderConfig = {
   handle?: string | null;     // e.g. "@thegamerweb"
   // Crop focus for whichever image this slide uses (hero or itemImage)
   imagePosition?: ImagePosition | null;
+  // Where the title/heading sits on cover + item slides (default "bottom")
+  slideTextPosition?: SlideTextPosition;
   // Branding
   accentColor: string;
   textColor: string;
@@ -177,10 +181,14 @@ function Item(cfg: RenderConfig) {
 }
 
 /**
- * Shared layout for cover + item slides: image full-bleed background, optional
- * rank chip + logo overlaid top, all body content anchored in the bottom
- * third behind a dark gradient scrim. When no image is supplied, a diagonal
- * accent-color stripe fills the right half so the slide still feels composed.
+ * Shared layout for cover + item slides: image full-bleed background, with
+ * a dark gradient scrim behind the text. Two supported text positions:
+ *  - "bottom" (default): logo top-right, title/heading in the bottom third,
+ *    scrim darker at the bottom.
+ *  - "top-center": title/heading centered horizontally in the top third,
+ *    logo bottom-left, scrim darker at the top for readability.
+ * When no image is supplied, a diagonal accent-color stripe fills the right
+ * half so the slide still feels composed.
  */
 function FullBleedSlide(opts: {
   image: string | null;
@@ -191,6 +199,8 @@ function FullBleedSlide(opts: {
   const { image, topRank, cfg, bottom } = opts;
   const hasImage = !!image;
   const pos = cfg.imagePosition ?? { x: 50, y: 50 };
+  const textPosition: SlideTextPosition = cfg.slideTextPosition ?? "bottom";
+  const isTopCenter = textPosition === "top-center";
 
   const backdrop = hasImage
     ? {
@@ -228,6 +238,16 @@ function FullBleedSlide(opts: {
         },
       };
 
+  // Scrim direction flips with the text: darker at the end where the copy
+  // sits, still enough contrast at the opposite end to keep the logo legible.
+  const scrimGradient = isTopCenter
+    ? hasImage
+      ? "linear-gradient(180deg, rgba(0,0,0,0.90) 0%, rgba(0,0,0,0.30) 45%, rgba(0,0,0,0.55) 100%)"
+      : "linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 50%)"
+    : hasImage
+      ? "linear-gradient(180deg, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.30) 55%, rgba(0,0,0,0.92) 100%)"
+      : "linear-gradient(180deg, rgba(0,0,0,0) 50%, rgba(0,0,0,0.55) 100%)";
+
   const scrim = {
     type: "div",
     props: {
@@ -237,11 +257,46 @@ function FullBleedSlide(opts: {
         left: 0,
         width: SLIDE_W,
         height: SLIDE_H,
-        background: hasImage
-          ? "linear-gradient(180deg, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.30) 55%, rgba(0,0,0,0.92) 100%)"
-          : "linear-gradient(180deg, rgba(0,0,0,0) 50%, rgba(0,0,0,0.55) 100%)",
+        background: scrimGradient,
         display: "flex",
       },
+    },
+  };
+
+  // Top-center layout has no top rank chip (the chip only exists for legacy
+  // per-item rank overlays we no longer render on cover/item slides anyway),
+  // so we swap the space-between children based on textPosition. First child
+  // sits at the top of the padded content box, second child at the bottom.
+  const textBlock = {
+    type: "div",
+    props: {
+      style: {
+        display: "flex",
+        flexDirection: "column",
+        gap: 22,
+        alignItems: isTopCenter ? "center" : "flex-start",
+        textAlign: isTopCenter ? "center" : "left",
+        // Push the top-center block down slightly so it lands in the top
+        // third rather than hugging the padded edge.
+        marginTop: isTopCenter ? 90 : 0,
+        // Constrain centered text width so long titles wrap cleanly instead
+        // of running the full slide width.
+        maxWidth: isTopCenter ? SLIDE_W - 220 : undefined,
+      },
+      children: bottom,
+    },
+  };
+
+  const logoRowBottomLeft = {
+    type: "div",
+    props: {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-start",
+        height: CHIP_H,
+      },
+      children: [Logo(cfg, true, "left")],
     },
   };
 
@@ -273,20 +328,12 @@ function FullBleedSlide(opts: {
               justifyContent: "space-between",
               color: "#fff",
             },
-            children: [
-              TopBar(cfg, { rank: topRank, onDark: true }),
-              {
-                type: "div",
-                props: {
-                  style: {
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 22,
-                  },
-                  children: bottom,
-                },
-              },
-            ],
+            children: isTopCenter
+              ? [textBlock, logoRowBottomLeft]
+              : [
+                  TopBar(cfg, { rank: topRank, onDark: true }),
+                  textBlock,
+                ],
           },
         },
       ],
@@ -1197,7 +1244,7 @@ function RankChip(cfg: RenderConfig, rank: number) {
   };
 }
 
-function Logo(cfg: RenderConfig, onDark: boolean) {
+function Logo(cfg: RenderConfig, onDark: boolean, align: "left" | "right" = "right") {
   if (cfg.logoDataUrl) {
     // satori does not support width:"auto" on <img>; both dims must be numeric.
     // We wrap the image in a fixed-size flex box and let objectFit:contain
@@ -1208,7 +1255,7 @@ function Logo(cfg: RenderConfig, onDark: boolean) {
         style: {
           display: "flex",
           alignItems: "center",
-          justifyContent: "flex-end",
+          justifyContent: align === "left" ? "flex-start" : "flex-end",
           width: 260,
           height: CHIP_H,
         },
@@ -1223,7 +1270,7 @@ function Logo(cfg: RenderConfig, onDark: boolean) {
                 width: 260,
                 height: CHIP_H,
                 objectFit: "contain",
-                objectPosition: "right center",
+                objectPosition: `${align} center`,
               },
             },
           },
